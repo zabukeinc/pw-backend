@@ -43,7 +43,20 @@ export default class RegionService extends Service {
 							.getRepository<Province>(Province)
 							.find();
 						connection.close();
-						return res;
+						if (res) {
+							return {
+								status: "success",
+								data: res,
+								errors: [],
+							};
+						} else {
+							ctx.meta.$statusCode = 404;
+							return {
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						}
 					},
 				},
 				showCity: {
@@ -59,7 +72,20 @@ export default class RegionService extends Service {
 							.where("provinsi_id =:id", { id })
 							.getMany();
 						connection.close();
-						return res;
+						if (res) {
+							return {
+								status: "success",
+								data: res,
+								errors: [],
+							};
+						} else {
+							ctx.meta.$statusCode = 404;
+							return {
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						}
 					},
 				},
 				showDistrict: {
@@ -75,7 +101,21 @@ export default class RegionService extends Service {
 							.where("kabkot_id =:id", { id })
 							.getMany();
 						connection.close();
-						return res;
+						if (res != null) {
+							connection.close();
+							return {
+								status: "success",
+								data: res,
+								errors: [],
+							};
+						} else {
+							ctx.meta.$statusCode = 404;
+							return {
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						}
 					},
 				},
 			},

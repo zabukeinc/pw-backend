@@ -45,21 +45,17 @@ export default class ProductsService extends Service {
 			methods: {
 				async transformResult(ctx, entities, company) {
 					if (Array.isArray(entities)) {
-						const companies = await this.Promise.all(
+						await this.Promise.all(
 							entities.map((item) =>
 								this.transformEntity(ctx, item, company)
 							)
 						);
-						return {
-							companies,
-						};
 					} else {
-						const companies = await this.transformEntity(
+						return await this.transformEntity(
 							ctx,
 							entities,
 							company
 						);
-						return { companies };
 					}
 				},
 				async transformEntity(ctx, entity, branche) {
@@ -85,7 +81,11 @@ export default class ProductsService extends Service {
 							{},
 							doc
 						);
-						return json;
+						return {
+							status: "success",
+							data: json,
+							errors: [],
+						};
 					},
 				},
 				/**
@@ -100,8 +100,8 @@ export default class ProductsService extends Service {
 					params: {
 						id: { type: "string" },
 					},
-					async handler(ctx: Context<{ id: string }>) {
-						let json = null;
+					async handler(ctx) {
+						let result = null;
 						if (ctx.params.id) {
 							const found = await this.adapter.findById(
 								ctx.params.id
@@ -110,22 +110,27 @@ export default class ProductsService extends Service {
 								const doc = await this.adapter.findById(
 									ctx.params.id
 								);
-								json = await this.transformDocuments(
+								const json = await this.transformDocuments(
 									ctx,
 									ctx.params.id,
 									doc
 								);
+								result = {
+									status: "success",
+									data: json,
+									errors: [],
+								};
 							} else {
+								ctx.meta.$statusCode = 404;
 								return {
-									error: {
-										code: 203,
-										message: "Item not found",
-									},
+									status: "failed",
+									data: [],
+									errors: "Data not found",
 								};
 							}
 						}
 
-						return json;
+						return result;
 					},
 				},
 				/**
@@ -146,12 +151,14 @@ export default class ProductsService extends Service {
 							const found = await this.adapter.findOne({
 								company_name: entity.company_name,
 							});
-							if (found)
-								throw new error(
-									"company already exists!",
-									409,
-									entity.company_name
-								);
+							if (found) {
+								ctx.meta.$statusCode = 409;
+								return {
+									status: "failed",
+									data: [],
+									errors: "Company name already exists",
+								};
+							}
 						}
 
 						const doc = await this.adapter.insert(entity);
@@ -169,7 +176,11 @@ export default class ProductsService extends Service {
 
 						await this.entityChanged("created", r, ctx);
 
-						return r;
+						return {
+							status: "success",
+							data: [r],
+							errors: [],
+						};
 					},
 				},
 				/**
@@ -182,55 +193,41 @@ export default class ProductsService extends Service {
 				 * @returns {Object} Updated entity
 				 */
 				update: {
-					rest: "PUT /:id",
+					rest: "PUT /",
 					async handler(ctx) {
 						const newData = ctx.params;
-						const id = ctx.params.id;
-
+						const getId = await this.adapter.find();
+						const resultId = await this.transformDocuments(
+							ctx,
+							{},
+							getId
+						);
+						const id = resultId[0]._id;
 						if (id) {
-							const found = await this.adapter.findById(id);
-							if (!found) {
-								return {
-									error: {
-										status: 203,
-										message: "Item not found",
-									},
-								};
-							} else {
-								const update = {
-									$set: newData,
-								};
+							const update = {
+								$set: newData,
+							};
 
-								// validate company name
-								if (newData.company_name) {
-									const found = await this.adapter.findOne({
-										company_name: newData.company_name,
-									});
-									if (found)
-										throw new error(
-											"company name already exists!",
-											409,
-											newData.company_nme
-										);
-								}
-
-								const doc = await this.adapter.updateById(
-									id,
-									update
-								);
-								const docs = await this.transformDocuments(
-									ctx,
-									id,
-									doc
-								);
-								const r = await this.transformResult(
-									ctx,
-									docs,
-									ctx.meta
-								);
-								this.entityChanged("updated", r, ctx);
-								return { company: newData };
-							}
+							const doc = await this.adapter.updateById(
+								id,
+								update
+							);
+							const docs = await this.transformDocuments(
+								ctx,
+								id,
+								doc
+							);
+							const r = await this.transformResult(
+								ctx,
+								docs,
+								ctx.meta
+							);
+							this.entityChanged("updated", r, ctx);
+							return {
+								status: "success",
+								data: [newData],
+								errors: [],
+							};
 						}
 					},
 				},
@@ -246,38 +243,31 @@ export default class ProductsService extends Service {
 					rest: "DELETE /:id",
 					async handler(ctx) {
 						const id: string = ctx.params.id;
-						if (id) {
-							const found = await this.adapter.findById(id);
-							if (!found) {
-								ctx.meta.$statusCode = 404;
-								return {
-									error: {
-										code: 203,
-										message: "Item not found",
-									},
-								};
-							} else {
-								const doc = await this.adapter.removeById(id);
-								const docs = await this.transformDocuments(
-									ctx,
-									id,
-									doc
-								);
-								const r = await this.transformResult(
-									ctx,
-									docs,
-									ctx.meta
-								);
-								this.entityChanged("removed", r, ctx);
-								console.info(docs);
-								return r;
-							}
-						} else {
+						const found = await this.adapter.findById(id);
+						if (!found) {
+							ctx.meta.$statusCode = 404;
 							return {
-								error: {
-									code: 203,
-									message: "Item not found",
-								},
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						} else {
+							const doc = await this.adapter.removeById(id);
+							const docs = await this.transformDocuments(
+								ctx,
+								id,
+								doc
+							);
+							const r = await this.transformResult(
+								ctx,
+								docs,
+								ctx.meta
+							);
+							this.entityChanged("removed", r, ctx);
+							return {
+								status: "success",
+								data: [r],
+								errors: [],
 							};
 						}
 					},

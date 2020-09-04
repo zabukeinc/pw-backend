@@ -21,21 +21,17 @@ export default class WarehouseService extends Service {
 			methods: {
 				async transformResult(ctx, entities, warehouse) {
 					if (Array.isArray(entities)) {
-						const warehouses = await this.Promise.all(
+						return await this.Promise.all(
 							entities.map((item) =>
 								this.transformEntity(ctx, item, warehouse)
 							)
 						);
-						return {
-							warehouses,
-						};
 					} else {
-						const warehouses = await this.transformEntity(
+						return await this.transformEntity(
 							ctx,
 							entities,
 							warehouse
 						);
-						return { warehouses };
 					}
 				},
 				async transformEntity(ctx, entity, warehouse) {
@@ -97,7 +93,41 @@ export default class WarehouseService extends Service {
 							docs,
 							ctx.meta
 						);
-						return r;
+						return {
+							status: "success",
+							data: r,
+							errors: [],
+						};
+					},
+				},
+				/**
+				 * Get a warehouse by ID
+				 *
+				 * @actions
+				 * @param {Object} - Warehouse ID
+				 *
+				 * @returns {Object} Branch Entity
+				 */
+				get: {
+					rest: "GET /:id",
+					async handler(ctx) {
+						let id: number = parseInt(ctx.params.id);
+						const result = await this.adapter.findOne({ id });
+						if (!result) {
+							// status
+							ctx.meta.$statusCode = 404;
+							return {
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						} else {
+							return {
+								status: "success",
+								data: [result],
+								errors: [],
+							};
+						}
 					},
 				},
 				/**
@@ -112,18 +142,23 @@ export default class WarehouseService extends Service {
 					rest: "POST /",
 					async handler(ctx) {
 						const entity = ctx.params;
+						entity.created_at = new Date().toLocaleString("en-US", {
+							timeZone: "Asia/Jakarta",
+						});
 						await this.validateEntity(entity);
-						// validate Branch Code
+						// validate warehouse code
 						if (entity.warehouse_code) {
 							const found = await this.adapter.findOne({
 								warehouse_code: entity.warehouse_code,
 							});
-							if (found)
-								throw new error(
-									"Warehouse code already exists!",
-									409,
-									entity.warehouse_code
-								);
+							if (found) {
+								ctx.meta.$statusCode = 409;
+								return {
+									status: "failed",
+									data: [],
+									errors: "Warehouse code already exists",
+								};
+							}
 						}
 
 						const doc = await this.adapter.insert(entity);
@@ -138,7 +173,12 @@ export default class WarehouseService extends Service {
 							ctx.meta
 						);
 						await this.entityChanged("created", r, ctx);
-						return r;
+						ctx.meta.$statusCode = 201;
+						return {
+							status: "success",
+							data: [r],
+							errors: [],
+						};
 					},
 				},
 				/**
@@ -155,59 +195,46 @@ export default class WarehouseService extends Service {
 					async handler(ctx) {
 						let newData = ctx.params;
 						const id: number = parseInt(ctx.params.id);
-						newData.updated_at = new Date();
-
-						if (id) {
-							const found = await this.adapter.findOne({
-								id: id,
-							});
-							if (!found) {
-								return {
-									error: {
-										code: 203,
-										message: "Item not found",
-									},
-								};
-							} else {
-								const update = {
-									$set: newData,
-								};
-								// validate warehouse Code
-								if (newData.warehouse_code) {
-									const found = await this.adapter.findOne({
-										warehouse_code: newData.warehouse_code,
-									});
-									if (found)
-										throw new error(
-											"warehouse code already exists!",
-											409,
-											newData.warehouse_code
-										);
-								}
-								const doc = await this.adapter.updateById(
-									id,
-									update
-								);
-								const docs = await this.transformDocuments(
-									ctx,
-									id,
-									doc
-								);
-								const r = await this.transformResult(
-									ctx,
-									docs,
-									ctx.meta
-								);
-								this.entityChanged("updated", r, ctx);
-								return { warehouses: newData };
+						newData.updated_at = new Date().toLocaleString(
+							"en-US",
+							{
+								timeZone: "Asia/Jakarta",
 							}
-						} else {
-							ctx.meta.$statusCode = 404;
+						);
+
+						const found = await this.adapter.findOne({
+							id: id,
+						});
+						if (!found) {
+							ctx.params.$statusCode = 404;
 							return {
-								error: {
-									code: 203,
-									message: "Item not found",
-								},
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						} else {
+							const update = {
+								$set: newData,
+							};
+							const doc = await this.adapter.updateById(
+								id,
+								update
+							);
+							const docs = await this.transformDocuments(
+								ctx,
+								id,
+								doc
+							);
+							const r = await this.transformResult(
+								ctx,
+								docs,
+								ctx.meta
+							);
+							this.entityChanged("updated", r, ctx);
+							return {
+								status: "success",
+								data: [newData],
+								errors: [],
 							};
 						}
 					},
@@ -226,41 +253,40 @@ export default class WarehouseService extends Service {
 						id: { type: "any", positive: true, integer: true },
 					},
 					async handler(ctx) {
-						const id: number = parseInt(ctx.params.id);
-						if (id) {
-							const found = await this.adapter.findOne({
-								id: id,
-							});
-							if (!found) {
-								ctx.meta.$statusCode = 404;
-								return {
-									error: {
-										code: 203,
-										message: "Item not found",
-									},
-								};
-							} else {
-								const doc = await this.adapter.removeById(id);
-								const docs = await this.transformDocuments(
-									ctx,
-									id,
-									doc
-								);
-								const r = await this.transformResult(
-									ctx,
-									docs,
-									ctx.meta
-								);
-								this.entityChanged("removed", r, ctx);
-								console.info(docs);
-								return r;
+						ctx.params.deleted_at = new Date().toLocaleString(
+							"en-US",
+							{
+								timeZone: "Asia/Jakarta",
 							}
-						} else {
+						);
+						const id: number = parseInt(ctx.params.id);
+						const found = await this.adapter.findOne({
+							id: id,
+						});
+						if (!found) {
+							ctx.params.$statusCode = 404;
 							return {
-								error: {
-									code: 203,
-									message: "Item not found",
-								},
+								status: "failed",
+								data: [],
+								errors: "Data not found",
+							};
+						} else {
+							const doc = await this.adapter.removeById(id);
+							const docs = await this.transformDocuments(
+								ctx,
+								id,
+								doc
+							);
+							const r = await this.transformResult(
+								ctx,
+								docs,
+								ctx.meta
+							);
+							this.entityChanged("removed", r, ctx);
+							return {
+								status: "success",
+								data: r,
+								errors: [],
 							};
 						}
 					},

@@ -45,9 +45,7 @@ class ApiService extends Service {
 						// The gateway will dynamically build the full routes from service schema.
 						autoAliases: true,
 
-						aliases: {
-							"POST branches": "branches.add",
-						},
+						aliases: {},
 						/**
 					 * Before call hook. You can check the request.
 					 * @param {Context} ctx
