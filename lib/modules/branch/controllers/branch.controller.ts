@@ -1,65 +1,84 @@
 "use strict";
 import { Context, Service, ServiceBroker } from "moleculer";
 import { Branch } from "../models/Branch";
+import { Responses } from "../../utils/Responses";
 const _ = require("lodash");
-const Promise = require("bluebird");
 
 export class BranchController {
-	private responses(status_code: number, message: string, data?: any) {
-		return {
-			code: status_code,
-			message: message,
-			data: data,
-		};
-	}
-
-	public index(ctx: any) {
-		// const limit = ctx.params.limit ? Number(ctx.params.limit) : 20;
-		// const offset = ctx.params.offset ? Number(ctx.params.offset) : 0;
-		// let params = {
-		// 	limit,
-		// 	offset,
-		// 	sort: ["-created_at"],
-		// 	query: {},
-		// };
-		// let countParams;
-
-		// countParams = Object.assign({}, params);
-		// // Remove pagination params
-		// if (countParams && countParams.limit) countParams.limit = null;
-		// if (countParams && countParams.offset) countParams.offset = null;
-		// const branches = ctx.call("branches.list");
-		// return branches;
-		ctx.call("branches.list").then((res: any) => {
-			console.info(res);
-		});
-	}
-	public create(ctx: Context) {
-		const params = ctx.params;
-		const branches = ctx.call("branches.create", params);
-		if (branches) {
-			return {
-				branch: params,
-			};
+	private responses = new Responses();
+	public async index(ctx: any): Promise<any> {
+		const data = await ctx.call("branches.find");
+		if (data) {
+			return this.responses.json("success", data);
 		} else {
-			this.responses(500, "Failed to update data");
+			ctx.meta.$statusCode = 500;
+			return this.responses.json("failed", [], "Something went wrong");
+		}
+	}
+	public async show(ctx: any): Promise<any> {
+		const data = await ctx.call("branches.get", { id: ctx.params.id });
+		if (data) {
+			return this.responses.json("success", data);
+		} else {
+			ctx.meta.$statusCode = 404;
+			return this.responses.json("failed", [], "Data not found");
+		}
+	}
+	public async create(ctx: any): Promise<any> {
+		ctx.params.created_at = new Date().toLocaleString("en-US", {
+			timeZone: "Asia/Jakarta",
+		});
+		const data = await ctx.call("branches.create", ctx.params);
+		if (data) {
+			ctx.meta.$statusCode = 201;
+			return this.responses.json("success", data);
+		} else {
+			ctx.meta.$statusCode = 500;
+			return this.responses.json("failed", [], "Failed to create data");
+		}
+	}
+	public async update(ctx: any): Promise<any> {
+		// Gonna fix this soon
+		const newData = {
+			branch_code: ctx.params.branch_code,
+			branch_name: ctx.params.branch_name,
+			address: ctx.params.address,
+			city: ctx.params.city,
+			province: ctx.params.province,
+			postal_code: ctx.params.postal_code,
+			country: ctx.params.country,
+			phone: ctx.params.phone,
+			email: ctx.params.email,
+			web_address: ctx.params.web_address,
+		};
+		const data = await ctx.call("branches.update", {
+			id: ctx.params.id,
+			branch_code: ctx.params.branch_code,
+			branch_name: ctx.params.branch_name,
+			address: ctx.params.address,
+			city: ctx.params.city,
+			province: ctx.params.province,
+			postal_code: ctx.params.postal_code,
+			country: ctx.params.country,
+			phone: ctx.params.phone,
+			email: ctx.params.email,
+			web_address: ctx.params.web_address,
+		});
+		if (data) {
+			return this.responses.json("success");
+		} else {
+			ctx.meta.$statusCode = 500;
+			return this.responses.json("failed", [], "Something went wrong");
 		}
 	}
 
-	public update(ctx: Context, id: number) {
-		const newData = ctx.params;
-		const branches = ctx.call("branches.get", { id: id });
-		if (branches) {
-			const update = ctx.call("branches.update", { id, newData });
-			if (update) {
-				return {
-					branch: newData,
-				};
-			} else {
-				this.responses(500, "Failed to update data");
-			}
+	public delete(ctx: any) {
+		const data = ctx.call("branches.remove");
+		if (data) {
+			return this.responses.json("success", data);
 		} else {
-			this.responses(203, "Item not found");
+			ctx.meta.$statusCode = 500;
+			return this.responses.json("failed", [], "Failed to update data");
 		}
 	}
 }
