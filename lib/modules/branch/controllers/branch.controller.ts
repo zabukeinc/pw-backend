@@ -72,8 +72,8 @@ export class BranchController {
 		}
 	}
 
-	public delete(ctx: any) {
-		const data = ctx.call("branches.remove");
+	public async remove(ctx: any) {
+		const data = await ctx.call("branches.remove");
 		if (data) {
 			return this.responses.json("success", data);
 		} else {

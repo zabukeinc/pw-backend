@@ -102,7 +102,7 @@ export default class BranchesService extends Service {
 				deleteFoo: {
 					rest: "DELETE /foo/:id",
 					async handler(ctx) {
-						return this.branchController.removeById(ctx.params.id);
+						return this.branchController.remove(ctx.params.id);
 					},
 				},
 			},
